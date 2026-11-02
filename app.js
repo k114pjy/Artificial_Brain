@@ -27,22 +27,33 @@ function home(){const last=getStore('da-last',null);return `<section class="page
 // The graph is projected from three-dimensional coordinates onto an SVG viewport.
 // Keep the camera position while navigating between concepts.
 const brainView = { yaw: -0.16, pitch: 0.08 };
-const brainPoints = (() => {
-  const points = [];
-  for (let side of [-1, 1]) {
-    for (let lat = 1; lat < 12; lat++) {
-      const phi = Math.PI * lat / 12;
-      for (let lon = 0; lon < 24; lon++) {
-        const theta = 2 * Math.PI * lon / 24;
-        // Two slightly irregular lobes suggest a brain without anatomical claims.
-        const ripple = 1 + 0.035 * Math.sin(theta * 5 + phi * 7);
-        points.push({x: side * 1.05 + 1.06 * Math.sin(phi) * Math.cos(theta) * ripple,
-          y: 1.35 * Math.cos(phi) * ripple,
-          z: 0.93 * Math.sin(phi) * Math.sin(theta) * ripple, lat, lon, side});
-      }
-    }
+// A sculpted side profile, extruded in depth and projected with the concept nodes.
+// The stylized silhouette is illustrative rather than an anatomical model.
+const brainOutline = [
+ [-2.30,.02],[-2.26,.38],[-2.08,.72],[-1.80,1.02],[-1.40,1.26],[-.92,1.39],[-.45,1.48],
+ [.08,1.46],[.56,1.39],[1.02,1.24],[1.44,1.01],[1.78,.70],[2.00,.32],[2.08,-.07],
+ [2.03,-.41],[1.83,-.64],[1.52,-.66],[1.65,-.88],[1.59,-1.08],[1.35,-1.24],[.98,-1.29],
+ [.64,-1.22],[.30,-1.10],[.38,-1.58],[.12,-1.61],[-.15,-1.03],[-.62,-.94],[-.99,-.77],
+ [-1.29,-.91],[-1.60,-.76],[-1.86,-.54],[-2.13,-.43],[-2.29,-.24]
+];
+function inBrain(x,y){let inside=false;for(let i=0,j=brainOutline.length-1;i<brainOutline.length;j=i++){
+ const [xi,yi]=brainOutline[i],[xj,yj]=brainOutline[j];
+ if(((yi>y)!==(yj>y)) && x<(xj-xi)*(y-yi)/(yj-yi)+xi)inside=!inside;
+ }return inside;}
+const brainMesh = (() => {
+ const points=[], lines=[];const grid=new Map();
+ for(let row=0;row<22;row++)for(let col=0;col<33;col++){
+  const x=-2.3+col*.14 + Math.sin(row*7+col*3)*.035;
+  const y=-1.58+row*.145 + Math.cos(row*4+col*9)*.035;
+  if(!inBrain(x,y))continue;
+  const z=.28 + .42*Math.sin(col*.43+row*.31)**2;
+  const p={x,y,z}; grid.set(`${col},${row}`,points.length);points.push(p);
+  for(const [dx,dy] of [[-1,0],[0,-1],[-1,-1],[1,-1]]){
+   const other=grid.get(`${col+dx},${row+dy}`);
+   if(other!==undefined && Math.sin(col*11+row*19+dx)>-.32)lines.push([other,points.length-1]);
   }
-  return points;
+ }
+ return {points,lines};
 })();
 function graph(selected){
  const neighbours=connected(selected.id).map(c=>c.id);
@@ -51,7 +62,7 @@ function graph(selected){
 function setupBrain(){
  const svg=app.querySelector('.brain-3d'); if(!svg)return;
  const cloud=svg.querySelector('.brain-cloud');
- const byId=Object.fromEntries(concepts.map((c,i)=>[c.id,{x:(c.x-380)/145,y:(255-c.y)/125,z:Math.sin(i*2.7)*0.68}]));
+ const byId=Object.fromEntries(concepts.map((c,i)=>[c.id,{x:(c.x-380)/160,y:(290-c.y)/155,z:.85+Math.sin(i*2.7)*.12}]));
  let pointer=null, moved=false, startX=0, startY=0;
  const project=point=>{
   const cy=Math.cos(brainView.yaw),sy=Math.sin(brainView.yaw),cx=Math.cos(brainView.pitch),sx=Math.sin(brainView.pitch);
@@ -61,8 +72,17 @@ function setupBrain(){
   return {x:380+x*120*scale,y:255-y*120*scale,depth,scale};
  };
  function draw(){
-  const projected=brainPoints.map(p=>({...project(p),source:p})).sort((a,b)=>a.depth-b.depth);
-  cloud.innerHTML=projected.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(1.6+p.scale*.9).toFixed(1)}" opacity="${Math.max(.12,Math.min(.47,.27+p.depth*.09)).toFixed(2)}"/>`).join('');
+  // Layered contours rotate in 3D to give the silhouette depth.
+  const layers=[-.75,-.5,-.25,0,.25,.5,.75].map(z=>{
+   const taper=Math.sqrt(Math.max(.1,1-(z/.92)**2));
+   const outline=brainOutline.map(([x,y])=>project({x:x*taper,y:y*taper,z}));
+   const d=outline.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+' Z';
+   return `<path d="${d}" class="brain-silhouette"/>`;
+  }).join('');
+  const projected=brainMesh.points.map(project);
+  const lines=brainMesh.lines.map(([a,b])=>`<line x1="${projected[a].x.toFixed(1)}" y1="${projected[a].y.toFixed(1)}" x2="${projected[b].x.toFixed(1)}" y2="${projected[b].y.toFixed(1)}"/>`).join('');
+  const dots=projected.map((p,i)=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${i%13===0?2.3:1.1}"/>`).join('');
+  cloud.innerHTML=`<g class="brain-shell">${layers}</g><g class="brain-web">${lines}${dots}</g>`;
   const coords=Object.fromEntries(Object.entries(byId).map(([id,p])=>[id,project(p)]));
   svg.querySelectorAll('[data-edge]').forEach(line=>{const [a,b]=line.dataset.edge.split(':');line.setAttribute('x1',coords[a].x);line.setAttribute('y1',coords[a].y);line.setAttribute('x2',coords[b].x);line.setAttribute('y2',coords[b].y)});
   const layer=svg.querySelector('.brain-nodes');
