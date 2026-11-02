@@ -64,7 +64,7 @@ export function mountBrain(container, concepts, edges, selected) {
     if(disposed)return;
     const outlineMaterial=()=>new THREE.ShaderMaterial({
       transparent:true,depthWrite:false,side:THREE.FrontSide,
-      uniforms:{color:{value:new THREE.Color(0x2194b7)}},
+      uniforms:{color:{value:new THREE.Color(0xffd5d8)}},
       vertexShader:`varying vec3 n;varying vec3 v;void main(){vec4 p=modelViewMatrix*vec4(position,1.0);n=normalize(normalMatrix*normal);v=-p.xyz;gl_Position=projectionMatrix*p;}`,
       fragmentShader:`uniform vec3 color;varying vec3 n;varying vec3 v;void main(){float rim=1.0-abs(dot(normalize(n),normalize(v)));float a=smoothstep(.80,.99,rim)*.55;if(a<.015)discard;gl_FragColor=vec4(color,a);}`
     });
@@ -118,8 +118,8 @@ export function mountBrain(container, concepts, edges, selected) {
     const glowTexture=new THREE.CanvasTexture(glowCanvas);
     concepts.forEach(c=>{
       const chosen=c.id===selected;
-      const dot=new THREE.Mesh(dotGeo.clone(),new THREE.MeshBasicMaterial({color:chosen?0xc2334e:0x087f9d}));dot.position.copy(coords[c.id]);dot.userData.concept=c;nodeGroup.add(dot);
-      const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture.clone(),color:chosen?0xffba99:0x77fff1,transparent:true,depthWrite:false}));glow.position.copy(dot.position);glow.scale.setScalar(chosen?.23:.15);nodeGroup.add(glow);
+      const dot=new THREE.Mesh(dotGeo.clone(),new THREE.MeshBasicMaterial({color:chosen?0xffd77a:0x9ef8f2}));dot.position.copy(coords[c.id]);dot.userData.concept=c;nodeGroup.add(dot);
+      const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture.clone(),color:chosen?0xffd77a:0x77fff1,transparent:true,depthWrite:false}));glow.position.copy(dot.position);glow.scale.setScalar(chosen?.23:.15);nodeGroup.add(glow);
       const label=document.createElement('a');label.href=`#map/${c.id}`;label.className='brain-dot-label'+(chosen?' selected':'');label.textContent=c.name;labels.append(label);
       markers.push({dot,label,position:dot.position,c,chosen});
     });
@@ -128,7 +128,7 @@ export function mountBrain(container, concepts, edges, selected) {
       const start=coords[a],end=coords[b];const middle=start.clone().add(end).multiplyScalar(.5);middle.addScaledVector(middle.clone().normalize(),.1);
       const curve=new THREE.QuadraticBezierCurve3(start,middle,end);
       const geo=new THREE.BufferGeometry().setFromPoints(curve.getPoints(40));
-      connectionGroup.add(new THREE.Line(geo,new THREE.LineBasicMaterial({color:0x8a2342,transparent:true,opacity:.85})));
+      connectionGroup.add(new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xffd77a,transparent:true,opacity:.95})));
     });
     // Deterministic interior points and local links create a volumetric network.
     let seed=13271;
@@ -151,9 +151,9 @@ export function mountBrain(container, concepts, edges, selected) {
       const neighbours=netPoints.map((q,j)=>({j,d:p.distanceToSquared(q)})).filter(x=>x.j!==i && x.d<.3).sort((a,b)=>a.d-b.d).slice(0,3);
       neighbours.forEach(({j})=>{const key=[Math.min(i,j),Math.max(i,j)].join(':');if(!used.has(key)){used.add(key);links.push(p,netPoints[j])}});
     });
-    brain.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(links),new THREE.LineBasicMaterial({color:0x2499b6,transparent:true,opacity:.38,depthWrite:false})));
+    brain.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(links),new THREE.LineBasicMaterial({color:0x8debe8,transparent:true,opacity:.55,depthWrite:false})));
     const netGeo=new THREE.BufferGeometry().setFromPoints(netPoints);
-    brain.add(new THREE.Points(netGeo,new THREE.PointsMaterial({color:0x11a9b4,size:.025,transparent:true,opacity:.8,depthWrite:false})));
+    brain.add(new THREE.Points(netGeo,new THREE.PointsMaterial({color:0xb1fff6,size:.025,transparent:true,opacity:.9,depthWrite:false})));
     // Source geometries are only used to arrange concept points; the envelope renders.
     geometries.forEach(g=>g.dispose());
 

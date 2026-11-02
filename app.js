@@ -1,4 +1,4 @@
-import { mountBrain } from './brain3d.js?v=network-1';
+import { mountBrain } from './brain3d.js?v=crimson-1';
 'use strict';
 const concepts=[
 {id:'data',name:'데이터',category:'데이터 기초',x:110,y:205,summary:'관찰하거나 측정한 사실을 분석할 수 있도록 기록한 것입니다.',why:'행과 열이 무엇을 나타내는지 알아야 요약과 비교가 의미를 갖습니다.',source:'Wickham, Tidy Data (2014)',url:'https://doi.org/10.18637/jss.v059.i10'},
