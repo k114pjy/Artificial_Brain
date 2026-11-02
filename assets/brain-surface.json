@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "source": "FreeSurfer fsaverage5 via Nilearn 0.12.1",
+  "hemispheres": [
+    {
+      "side": "left",
+      "vertexCount": 10242,
+      "faceCount": 20480,
+      "positionOffset": 0,
+      "indexOffset": 122904
+    },
+    {
+      "side": "right",
+      "vertexCount": 10242,
+      "faceCount": 20480,
+      "positionOffset": 368664,
+      "indexOffset": 491568
+    }
+  ]
+}
