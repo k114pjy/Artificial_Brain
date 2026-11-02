@@ -23,3 +23,8 @@ subject to the terms and conditions in [FREESURFER-LICENSE.txt](FREESURFER-LICEN
 Nilearn's distribution license: [NILEARN-LICENSE.txt](NILEARN-LICENSE.txt).
 Rendering uses Three.js 0.180.0 and OrbitControls, under the
 [MIT license](../vendor/THREE-LICENSE.txt).
+
+The current viewer derives a convex outer envelope for each hemisphere, subdivides
+and smooths it, and renders only its rim. `tools/derive-envelope.py` reproduces
+this derivative. Interior points and network links are generated illustrations,
+not anatomical connectivity or measured neurons.
