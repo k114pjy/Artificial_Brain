@@ -6,14 +6,15 @@ info.innerHTML = `<p id="tutor-state" role="status">연결 상태 확인 중…<
 const status = info.querySelector('#tutor-state'), messagesEl = info.querySelector('#tutor-messages');
 const question = info.querySelector('#tutor-question'), form = info.querySelector('#tutor-form');
 let configured = false, selectedText = '';
-const conversationKey = () => 'da-chat:' + (location.hash || '#home');
-function readHistory() { try { const v = JSON.parse(localStorage.getItem(conversationKey())); return Array.isArray(v) ? v.filter(x => x && ['user','assistant'].includes(x.role) && typeof x.content === 'string').slice(-20) : []; } catch { return []; } }
-function saveHistory(history) { try { const href=location.hash||'#home';localStorage.setItem(conversationKey(),JSON.stringify(history.slice(-20)));const index=JSON.parse(localStorage.getItem('da-chat-index')||'{}');if(history.length)index[href]={href,title:document.querySelector('#app h1')?.textContent||'학습 대화',at:Date.now()};else delete index[href];localStorage.setItem('da-chat-index',JSON.stringify(index)); } catch {} }
+const revisions = new Map(), pending = new Set();
+const conversationKey = (href = location.hash || '#home') => 'da-chat:' + href;
+function readHistory(href = location.hash || '#home') { try { const v = JSON.parse(localStorage.getItem(conversationKey(href))); return Array.isArray(v) ? v.filter(x => x && ['user','assistant'].includes(x.role) && typeof x.content === 'string') : []; } catch { return []; } }
+function saveHistory(history, href = location.hash || '#home', title = document.querySelector('#app h1')?.textContent || '학습 대화') { try { localStorage.setItem(conversationKey(href),JSON.stringify(history));const index=JSON.parse(localStorage.getItem('da-chat-index')||'{}');if(history.length)index[href]={href,title,at:Date.now()};else delete index[href];localStorage.setItem('da-chat-index',JSON.stringify(index));return true; } catch { return false; } }
 function showHistory() { messagesEl.replaceChildren(); for (const item of readHistory()) { const p = document.createElement('p'); const strong = document.createElement('strong'); strong.textContent = item.role === 'user' ? '나: ' : '튜터: '; p.append(strong,document.createTextNode(item.content)); messagesEl.append(p); } }
-async function checkStatus() { configured=false; form.querySelector('button').disabled=true; status.textContent='연결 상태 확인 중…'; try { const response = await fetch('/api/status',{cache:'no-store'}); if (!response.ok || !(response.headers.get('content-type') || '').includes('application/json')) throw Error(); configured = (await response.json()).configured === true; } catch { configured = false; } status.textContent = configured ? '서버와 키 설정을 확인했습니다. 답변에는 API 크레딧이 필요하며 대화는 이 브라우저에 저장됩니다.' : 'AI 튜터가 연결되지 않았습니다. 이 사이트에 서버 연결과 API 설정이 필요합니다.'; form.querySelector('button').disabled = !configured; }
+async function checkStatus() { configured=false; form.querySelector('button').disabled=true; status.textContent='연결 상태 확인 중…'; try { const response = await fetch('/api/status',{cache:'no-store'}); if (!response.ok || !(response.headers.get('content-type') || '').includes('application/json')) throw Error(); configured = (await response.json()).configured === true; } catch { configured = false; } status.textContent = configured ? '서버와 키 설정을 확인했습니다. 답변에는 API 크레딧이 필요하며 대화는 이 브라우저에 저장됩니다.' : 'AI 튜터가 연결되지 않았습니다. 이 사이트에 서버 연결과 API 설정이 필요합니다.'; form.querySelector('button').disabled = !configured || pending.has(location.hash||'#home'); }
 document.querySelector('#tutor-open').addEventListener('pointerdown', () => { selectedText = String(window.getSelection()).slice(0,2000); });
 document.querySelector('#tutor-open').addEventListener('click', () => { showHistory(); checkStatus(); if (selectedText) question.value = `선택한 부분을 설명해 주세요: ${selectedText}`; });
-info.querySelector('#tutor-clear').addEventListener('click', () => { saveHistory([]); showHistory(); });
+info.querySelector('#tutor-clear').addEventListener('click', () => { const href=location.hash||'#home';revisions.set(href,(revisions.get(href)||0)+1);saveHistory([],href);showHistory();status.textContent='현재 대화를 지웠습니다.'; });
 const voiceButton = info.querySelector('#tutor-voice'), speakButton = info.querySelector('#tutor-speak');
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (!Recognition) { voiceButton.disabled = true; voiceButton.textContent = '이 브라우저는 음성 입력을 지원하지 않아요'; }
@@ -27,14 +28,30 @@ else voiceButton.addEventListener('click', () => {
 if (!('speechSynthesis' in window)) { speakButton.disabled = true; speakButton.textContent = '이 브라우저는 음성 출력을 지원하지 않아요'; }
 else speakButton.addEventListener('click', () => { const last = readHistory().filter(m => m.role === 'assistant').at(-1); if (!last) { status.textContent = '먼저 튜터의 답변을 받아 주세요.'; return; } const speech = new SpeechSynthesisUtterance(last.content); speech.lang = 'ko-KR'; speechSynthesis.cancel(); speechSynthesis.speak(speech); });
 form.addEventListener('submit', async e => {
- e.preventDefault(); const text = question.value.trim(); if (!text || !configured) return;
- const history = readHistory(); history.push({role:'user',content:text}); saveHistory(history); question.value = ''; showHistory();
+ e.preventDefault(); const text = question.value.trim(), href=location.hash||'#home'; if (!text || !configured || pending.has(href)) return;
+ const title=document.querySelector('#app h1')?.textContent || '학습 대화', revision=revisions.get(href)||0;
+ const history = readHistory(href); history.push({role:'user',content:text}); if(!saveHistory(history,href,title)){status.textContent='브라우저에 대화를 저장하지 못했습니다.';return} pending.add(href);question.value = ''; showHistory();
  const button = form.querySelector('button'); button.disabled = true; status.textContent = '답변을 생각하고 있어요…';
  const sources=[...document.querySelectorAll('#app a.source')].slice(0,8).map(a=>a.textContent+' '+a.href).join('\n');
- const context = `학습 위치: ${location.hash || '#home'}\n선택 내용: ${selectedText}\n현재 페이지: ${(document.querySelector('#app')?.innerText || '').slice(0,4500)}\n화면에 표시된 참고 자료:\n${sources}`;
- try { const response = await fetch('/api/tutor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({context,messages:history.slice(-20)})}); const data = await response.json(); if (!response.ok) throw Error(data.error || '요청에 실패했습니다.'); history.push({role:'assistant',content:data.answer}); recordLearning({type:'chat',title:'질문과 답변 · '+(location.hash||'#home'),text:'질문: '+text+'\n핵심 답변: '+data.summary}); saveHistory(history); showHistory(); let added=0; try { const saved=JSON.parse(localStorage.getItem('da-review') || '[]'); const reasons=JSON.parse(localStorage.getItem('da-review-reasons') || '{}'); for(const item of data.review || []) { if(!concepts.some(c=>c.id===item.concept_id))continue; if(!saved.includes(item.concept_id)){saved.push(item.concept_id); added++;} if(!reasons[item.concept_id])reasons[item.concept_id]={reason:item.reason,evidence:item.evidence}; } localStorage.setItem('da-review',JSON.stringify(saved)); localStorage.setItem('da-review-reasons',JSON.stringify(reasons)); if((data.review||[]).length)document.dispatchEvent(new Event('review-updated')); } catch {} status.textContent = added ? `대화를 저장하고 복습 개념 ${added}개를 표시했어요. 다시 볼 개념에서 이유를 확인하고 수정할 수 있습니다.` : '대화가 이 브라우저에 저장되었습니다.'; }
- catch (err) { status.textContent = err.message || '튜터 연결에 실패했습니다.'; }
- finally { button.disabled = !configured; }
+ const context = `학습 위치: ${href}\n선택 내용: ${selectedText}\n현재 페이지: ${(document.querySelector('#app')?.innerText || '').slice(0,4500)}\n화면에 표시된 참고 자료:\n${sources}`;
+ try {
+  const response=await fetch('/api/tutor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({context,messages:history.slice(-20)})});
+  const data=await response.json();if(!response.ok)throw Error(data.error||'요청에 실패했습니다.');
+  if((revisions.get(href)||0)!==revision)return;
+  history.push({role:'assistant',content:data.answer});
+  const stored=saveHistory(history,href,title);
+  recordLearning({type:'chat',title:'질문과 답변 · '+href,text:'질문: '+text+'\n핵심 답변: '+data.summary});
+  if((location.hash||'#home')===href)showHistory();
+  let added=0;
+  try {
+   const saved=JSON.parse(localStorage.getItem('da-review')||'[]'),reasons=JSON.parse(localStorage.getItem('da-review-reasons')||'{}');
+   for(const item of data.review||[]){if(!concepts.some(c=>c.id===item.concept_id))continue;if(!saved.includes(item.concept_id)){saved.push(item.concept_id);added++;}if(!reasons[item.concept_id])reasons[item.concept_id]={reason:item.reason,evidence:item.evidence};}
+   localStorage.setItem('da-review',JSON.stringify(saved));localStorage.setItem('da-review-reasons',JSON.stringify(reasons));
+   if((data.review||[]).length)document.dispatchEvent(new Event('review-updated'));
+  } catch {}
+  if((location.hash||'#home')===href)status.textContent=!stored?'브라우저에 답변을 저장하지 못했습니다.':added?`대화를 저장하고 복습 개념 ${added}개를 표시했어요. 다시 볼 개념에서 이유를 확인하고 수정할 수 있습니다.`:'대화가 이 브라우저에 저장되었습니다.';
+ } catch(err) { if((location.hash||'#home')===href && (revisions.get(href)||0)===revision)status.textContent=err.message||'튜터 연결에 실패했습니다.'; }
+ finally { pending.delete(href);if((location.hash||'#home')===href)button.disabled=!configured; }
 });
 document.querySelector('#app').addEventListener('click', e => { if (e.target.id === 'check-understanding' || e.target.closest('[data-check-code]')) { selectedText = e.target.closest('.panel')?.querySelector('pre code')?.innerText.slice(0,2000) || ''; question.value = '이 코드의 이해도를 확인해 주세요. 먼저 질문 하나를 해 주세요.'; dialog.showModal(); showHistory(); checkStatus().then(() => { if (configured) form.requestSubmit(); }); } });
 
